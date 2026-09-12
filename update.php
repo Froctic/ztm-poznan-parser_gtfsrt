@@ -4,8 +4,18 @@ require_once __DIR__ . "/decoder.php";
 
 function updateVehicles()
 {
-    $url = "https://www.ztm.poznan.pl/pl/dla-deweloperow/getGtfsRtFile?file=vehicle_positions.pb";
+    $cacheFile = __DIR__ . "/vehicles.json";
+    $cacheTime = 10; // Время кэша в секундах. Данные из Познани не нужны чаще раза в 10 сек.
 
+    // ЕСЛИ файл существует И он свежий (изменен меньше 10 секунд назад)
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < $cacheTime)) {
+        // Просто читаем готовый JSON с сервера и возвращаем его, не качая заново из ZTM!
+        $jsonData = file_get_contents($cacheFile);
+        return json_decode($jsonData, true);
+    }
+
+    // --- ЕСЛИ КЭШ УСТАРЕЛ, КАЧАЕМ НОВЫЕ ДАННЫЕ ИЗ ПОЗНАНИ ---
+    $url = "https://ztm.poznan.pl";
     $ch = curl_init($url);
 
     curl_setopt_array($ch, [
@@ -16,10 +26,8 @@ function updateVehicles()
     ]);
 
     $data = curl_exec($ch);
-
     $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-
     curl_close($ch);
 
     if ($data === false) {
@@ -32,24 +40,14 @@ function updateVehicles()
 
     $result = decodeVehicleFeed($data);
 
-    $json = json_encode(
-        $result,
-        JSON_UNESCAPED_UNICODE |
-        JSON_UNESCAPED_SLASHES |
-        JSON_PRETTY_PRINT
-    );
+    $json = json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
     if ($json === false) {
         throw new Exception("JSON: " . json_last_error_msg());
     }
 
-    if (file_put_contents(
-        __DIR__ . "/vehicles.json",
-        $json,
-        LOCK_EX
-    ) === false) {
-        throw new Exception("Не удалось записать vehicles.json");
-    }
+    // Сохраняем свежую копию в кэш
+    file_put_contents($cacheFile, $json, LOCK_EX);
 
     return $result;
 }
