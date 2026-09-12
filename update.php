@@ -4,7 +4,7 @@ require_once __DIR__ . "/decoder.php";
 
 function updateVehicles()
 {
-    $url = "https://ztm.poznan.pl";
+    $url = "https://www.ztm.poznan.pl/pl/dla-deweloperow/getGtfsRtFile?file=vehicle_positions.pb";
 
     $ch = curl_init($url);
 
